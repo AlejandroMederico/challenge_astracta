@@ -89,21 +89,22 @@ We welcome all kinds of contributions!
 
 # Pasos para ejecutar el proyecto
 
-1. En la carpeta Browser-extension/dist/ se encuentra la extension.
-2. Dependiendo de tu navegador debes habilitar el modo de desarrollo y cargar la extension.
-3. Debes tener previamente docker instalado.
-4. En la carpeta agent-simple/ debes copiar el archivo sample.env a .env y modificarlo con tus variables de entorno.
-5. En la carpeta agent-simple/ debes ejecutar el siguiente comando:
+1. En la carpeta Browser-extension/ copia el archivo virtual_temp.js.js.map a Browser-extension/dist/.
+2. Esta carpeta Browser-extension/dist/ contiene la extension.
+3. Dependiendo de tu navegador debes habilitar el modo de desarrollo y cargar la extension.
+4. Debes tener previamente docker instalado.
+5. En la carpeta agent-simple/ debes copiar el archivo sample.env a .env y modificarlo con tus variables de entorno.
+6. En la carpeta agent-simple/ debes ejecutar el siguiente comando:
 
 ```bash
 docker build -t agent-simple .
 docker run -p 8000:8000 --name agent-simple agent-simple
 ```
 
-6. Esto iniciara el agente en el puerto 8000.
-7. Cuando abras la extension, deberas agregar un nuevo copilot con la url http://localhost:8000
-8. Selecciona el simple copilot y abre el chat.
-9. Puedes empezar a preguntarle cualquier cosa.
+7. Esto iniciara el agente en el puerto 8000.
+8. Cuando abras la extension, deberas agregar un nuevo copilot con la url http://localhost:8000
+9. Selecciona el simple copilot y abre el chat.
+10. Puedes empezar a preguntarle cualquier cosa.
 
 # Resumen General de Cambios - Proyecto Browser Extension y Backend
 

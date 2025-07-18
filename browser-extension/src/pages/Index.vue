@@ -4,7 +4,13 @@ import browser from 'webextension-polyfill'
 import { useToast } from 'vue-toastification'
 import { AlertCircleFilledIcon } from 'vue-tabler-icons'
 import { useI18n } from 'vue-i18n'
-import { BrowserMessage, ActiveTabListener, ToggleSidebar, ActivateAgent, AgentActivation, InteractionSummary, ResizeSidebar } from '../scripts/browser-message'
+import { BrowserMessage, 
+          ActiveTabListener, 
+          ToggleSidebar, 
+          ActivateAgent, 
+          AgentActivation, 
+          InteractionSummary, 
+          ResizeSidebar } from '../scripts/browser-message'
 import { Agent } from '../scripts/agent'
 import { TabState, ChatMessage } from '../scripts/tab-state'
 import { findTabState, saveTabState } from '../scripts/tab-state-repository'
@@ -15,15 +21,14 @@ import CopilotList from '../components/CopilotList.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { HttpServiceError } from "../scripts/http"
 
+const minSidebarSize = 200
 const toast = useToast()
 const { t } = useI18n()
-
 const agent = ref<Agent>()
+const messages = ref<ChatMessage[]>([])
 let sidebarSize = 400
 let displaying = false
-const minSidebarSize = 200
 let lastResizePos = 0
-const messages = ref<ChatMessage[]>([])
 
 onBeforeMount(async () => {
   await restoreTabState()
@@ -165,10 +170,27 @@ const onUserMessage = async (text: string, file: Record<string, string>) => {
   agentSession!.processUserMessage(text, file, onAgentResponse, onAgentError)
 }
 
-const onAgentResponse = (text: string, complete: boolean) => {
-  const lastMessage = messages.value[messages.value.length - 1]
-  lastMessage.isComplete = complete
-  lastMessage.text += text
+function onAgentResponse(text: string, complete: boolean) {
+  let last = messages.value[messages.value.length - 1]
+  if (!last || last.isUser) {
+    last = ChatMessage.agentMessage()
+    messages.value.push(last)
+  }
+  last.reasoningSteps = last.reasoningSteps || []
+  last.finalAnswer   = last.finalAnswer   || ''
+  if (text.startsWith('[reasoning]')) {
+    const step = text.replace(/^\[reasoning\]\s*/, '')
+    last.reasoningSteps = [...last.reasoningSteps, step]
+  } else if (text.startsWith('[finalAnswer]')) {
+    const ans = text.replace(/^\[finalAnswer\]\s*/, '')
+    last.finalAnswer += ans
+  } else {
+    last.text += text
+  }
+  if (complete) {
+    last.isComplete = true
+  }
+  messages.value = [...messages.value]
 }
 
 const onAgentError = (error: any) => {
@@ -193,6 +215,7 @@ const onAgentError = (error: any) => {
     messages.value.push(ChatMessage.agentErrorMessage(text))
   }
 }
+
 </script>
 
 <template>
@@ -200,8 +223,13 @@ const onAgentError = (error: any) => {
     class="fixed flex flex-col -left-2 m-2 w-full h-[calc(100%_-_16px)] justify-left border border-gray-300 bg-white rounded-tl-3xl rounded-bl-3xl"
     id="sidebar">
     <div class="absolute left-0 z-auto cursor-ew-resize w-2 h-full" @mousedown="onStartResize" />
-    <CopilotChat v-if="agent" :messages="messages" :agent-id="agent.manifest.id" :agent-name="agent.manifest.name"
-      :agent-logo="agent.logo" :agent-capabilities="agent.manifest.capabilities || []" @userMessage="onUserMessage"
+    <CopilotChat v-if="agent" 
+      :messages="messages" 
+      :agent-id="agent.manifest.id" 
+      :agent-name="agent.manifest.name"
+      :agent-logo="agent.logo" 
+      :agent-capabilities="agent.manifest.capabilities || []" 
+      @userMessage="onUserMessage"
       @close="onCloseSidebar" />
     <CopilotList v-if="!agent" @activateAgent="onActivateAgent" @close="onCloseSidebar" />
   </div>

@@ -1,8 +1,19 @@
-import { Log, AsyncStorage, INavigator, IWindow, NavigateParams, NavigateResponse, UserManager, WebStorageStateStore, UserManagerSettings, User } from "oidc-client-ts"
-import browser from "webextension-polyfill"
+import {
+  Log,
+  AsyncStorage,
+  INavigator,
+  IWindow,
+  NavigateParams,
+  NavigateResponse,
+  UserManager,
+  WebStorageStateStore,
+  UserManagerSettings,
+  User,
+} from "oidc-client-ts";
+import browser from "webextension-polyfill";
 
-Log.setLogger(console)
-Log.setLevel(Log.WARN)
+Log.setLogger(console);
+Log.setLevel(Log.WARN);
 
 export class SessionStorage implements AsyncStorage {
   get length(): Promise<number> {
@@ -10,11 +21,11 @@ export class SessionStorage implements AsyncStorage {
   }
 
   clear(): Promise<void> {
-    return browser.storage.session.clear()
+    return browser.storage.session.clear();
   }
 
   getItem(key: string): Promise<string | null> {
-    return browser.storage.session.get(key).then((data) => data[key] || null)
+    return browser.storage.session.get(key).then((data) => data[key] || null);
   }
 
   key(index: number): Promise<string | null> {
@@ -31,61 +42,55 @@ export class SessionStorage implements AsyncStorage {
 }
 
 class PopupNavigator implements INavigator {
-
   async prepare(_: unknown): Promise<IWindow> {
     return new PopupHandler();
   }
 
-  async callback(url: string, _?: unknown) {
-  }
-
+  async callback(url: string, _?: unknown) {}
 }
 
 class PopupHandler implements IWindow {
-
   async navigate(params: NavigateParams): Promise<NavigateResponse> {
-    let url = await browser.identity.launchWebAuthFlow({ interactive: true, url: params.url })
-    return { url }
+    let url = await browser.identity.launchWebAuthFlow({ interactive: true, url: params.url });
+    return { url };
   }
 
-  close(): void {
-  }
-
+  close(): void {}
 }
 
 export interface AuthConfig {
-  url: string
-  clientId: string
-  scope: string 
+  url: string;
+  clientId: string;
+  scope: string;
 }
 
 export class AuthService {
-
-  userManager: UserManager
+  userManager: UserManager;
 
   constructor(config: AuthConfig | UserManager) {
-    this.userManager = new UserManager(AuthService.buildSettings(config), undefined, new PopupNavigator(), undefined)
+    this.userManager = new UserManager(AuthService.buildSettings(config), undefined, new PopupNavigator(), undefined);
   }
 
   private static buildSettings(conf: AuthConfig | UserManager): UserManagerSettings {
-    let authority, clientId, metadata, scope
-    let settings = (conf as UserManager).settings
+    let authority, clientId, metadata, scope;
+    let settings = (conf as UserManager).settings;
     if (settings) {
-      authority = settings.authority
-      clientId = settings.client_id
-      scope = settings.scope
+      authority = settings.authority;
+      clientId = settings.client_id;
+      scope = settings.scope;
       // @ts-ignore: this is the simple way to restore metadata from the json object, by accessing private and protected fields
-      metadata = (conf as UserManager)._client.metadataService._metadata
+      metadata = (conf as UserManager)._client.metadataService._metadata;
     } else {
-      let params = conf as AuthConfig
-      authority = params.url
-      clientId = params.clientId
-      scope = params.scope
+      let params = conf as AuthConfig;
+      authority = params.url;
+      clientId = params.clientId;
+      scope = params.scope;
     }
-    let redirectUri = browser.identity.getRedirectURL()
+    let redirectUri = browser.identity.getRedirectURL();
     return {
       authority: authority,
       client_id: clientId,
+      redirect_uri: redirectUri,
       popup_redirect_uri: redirectUri,
       silent_redirect_uri: redirectUri,
       scope: scope,
@@ -100,30 +105,29 @@ export class AuthService {
       we have faced some inconsistencies (for example while handling sidebar visibility) while handling state in index.vue which we need to research further.
       */
       automaticSilentRenew: false,
-      metadata: metadata
-    } as UserManagerSettings
+      metadata: metadata,
+    } as UserManagerSettings;
   }
 
   public static fromJsonObject(obj: any): AuthService | undefined {
-    return obj ? new AuthService(obj.userManager) : undefined
+    return obj ? new AuthService(obj.userManager) : undefined;
   }
 
   public async getUser(): Promise<User | null> {
-    let ret = await this.userManager.getUser()
+    let ret = await this.userManager.getUser();
     /* 
     Refresh token if it expires in less than 60 seconds.
     We use 60 seconds as a threshold in case there are differences 
     between browser and server clocks and also to consider potential 
     delays between this check and server token experiation check.
     */
-    if (ret && (ret.expires_in! < 60)) {
-      return await this.userManager.signinSilent()
+    if (ret && ret.expires_in! < 60) {
+      return await this.userManager.signinSilent();
     }
-    return ret
+    return ret;
   }
 
   public async login(): Promise<void> {
-    await this.userManager.signinPopup()
+    await this.userManager.signinPopup();
   }
-
 }

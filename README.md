@@ -6,7 +6,7 @@ Browser Copilot is a browser extension that allows you to use existing or custom
 
 ## Motivation
 
-The goal is to provide a versatile UI and simple framework to implement and use an ever-increasing set of copilots (AI assistants). These copilots can help in a wide range of tasks by taking advantage of browser extension capabilities. 
+The goal is to provide a versatile UI and simple framework to implement and use an ever-increasing set of copilots (AI assistants). These copilots can help in a wide range of tasks by taking advantage of browser extension capabilities.
 
 Here are a few examples of what these copilots can do:
 
@@ -82,7 +82,69 @@ devbox run build
 
 We welcome all kinds of contributions!
 
-* ⭐ **Give this project a star** to make it more visible to the entire community. It lets us know that you are interested in this project, motivating us to invest more effort into it.
-* 📢 Spread the word about this project. If you make any publications (tweets, StackOverflow mentions, LinkedIn posts, Medium articles, etc.) about it, please let us know. We plan to add references to such publications in the future.
-* 🙋 Ask questions and request improvements by creating issues or opening discussions in the repository.
-* 🧑‍💻 If you enjoy coding, you can build new agents, helping us implement browser extension features or general improvements.
+- ⭐ **Give this project a star** to make it more visible to the entire community. It lets us know that you are interested in this project, motivating us to invest more effort into it.
+- 📢 Spread the word about this project. If you make any publications (tweets, StackOverflow mentions, LinkedIn posts, Medium articles, etc.) about it, please let us know. We plan to add references to such publications in the future.
+- 🙋 Ask questions and request improvements by creating issues or opening discussions in the repository.
+- 🧑‍💻 If you enjoy coding, you can build new agents, helping us implement browser extension features or general improvements.
+
+# Pasos para ejecutar el proyecto
+
+1. En la carpeta Browser-extension/dist/ se encuentra la extension.
+2. Dependiendo de tu navegador debes habilitar el modo de desarrollo y cargar la extension.
+3. Debes tener previamente docker instalado.
+4. En la carpeta agent-simple/ debes copiar el archivo sample.env a .env y modificarlo con tus variables de entorno.
+5. En la carpeta agent-simple/ debes ejecutar el siguiente comando:
+
+```bash
+docker build -t agent-simple .
+docker run -p 8000:8000 --name agent-simple agent-simple
+```
+
+6. Esto iniciara el agente en el puerto 8000.
+7. Cuando abras la extension, deberas agregar un nuevo copilot con la url http://localhost:8000
+8. Selecciona el simple copilot y abre el chat.
+9. Puedes empezar a preguntarle cualquier cosa.
+
+# Resumen General de Cambios - Proyecto Browser Extension y Backend
+
+## Browser Extension
+
+- **Dependencias**:
+
+  - Actualización importante de `vite-plugin-web-extension` y múltiples librerías (ej. `autoprefixer`, `oidc-client-ts`, `postcss`).
+  - Cambio de versión y estructura del lockfile PNPM para mejorar gestión de paquetes.
+
+- **Componentes principales**:
+
+  - `CopilotChat.vue`: Mejoras en la gestión y renderizado del chat principal.
+  - `Message.vue`: Incorporación de elementos colapsables para mostrar razonamiento interno y estados mejorados para mensajes.
+  - `Index.vue`: Ajustes menores en la página principal.
+
+- **Scripts y lógica**:
+
+  - `auth.ts`: Mejoras en autenticación, gestión de sesiones y almacenamiento local.
+  - `flow.ts`: Ajustes en el flujo de interacción y manejo de errores.
+  - `tab-state.ts`: Mejoras en sincronización y manejo del estado de pestañas y mensajes.
+
+- **Nuevo componente `Collapsible.vue`**:
+  - Componente Vue para mostrar bloques colapsables con título y contenido.
+  - Permite expandir/contraer contenido para mejorar usabilidad y evitar saturación visual.
+  - Maneja estado interno y comunicación con componentes padres vía eventos.
+
+## Backend (agent-simple y agent-mock)
+
+- **agent-simple**:
+
+  - Corrección y mejora en la función `clock()` para devolver la hora con zona horaria Argentina y docstring bilingüe.
+  - Modificación en `process_question` para evitar placeholders literales y mostrar la hora real y el razonamiento paso a paso.
+  - Simplificación del Dockerfile eliminando dependencias innecesarias y mejorando el build con Poetry.
+  - Actualización en modelos, lógica principal (`agent_logic.py`, `main.py`) y documentación.
+
+- **agent-mock**:
+  - Actualización para mantener coherencia con agent-simple.
+  - Cambios en lógica de simulación y documentación.
+  - Ajustes en dependencias para alinearse con agent-simple.
+
+## Comentarios finales
+
+Estos cambios en conjunto mejoran la estabilidad, mantenibilidad y experiencia de usuario tanto en el frontend (extensión) como en el backend (agente IA). Se priorizó claridad, precisión y facilidad de despliegue.

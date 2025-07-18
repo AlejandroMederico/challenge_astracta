@@ -1,164 +1,219 @@
 <script lang="ts" setup>
-import { computed, nextTick, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/base16/gigavolt.min.css'
 import MarkdownItPlantuml from 'markdown-it-plantuml'
-import { ExclamationCircleIcon, CircleFilledIcon } from 'vue-tabler-icons'
-import NewPromptButton from './NewPromptButton.vue'
+import { CircleFilledIcon, ExclamationCircleIcon } from 'vue-tabler-icons'
 import CopyButton from './CopyButton.vue'
-import * as echarts from 'echarts'
-import moment from 'moment'
+import NewPromptButton from './NewPromptButton.vue'
+import Collapsible from './Collapsible.vue'
 
-const props = defineProps<{ text: string, file: Record<string, string>, isUser: boolean, isComplete: boolean, isSuccess: boolean, agentLogo: string, agentName: string, agentId: string }>()
+const props = defineProps<{
+  text: string
+  file: Record<string, string>
+  isUser: boolean
+  isComplete: boolean
+  isSuccess: boolean
+  agentLogo: string
+  agentName: string
+  agentId: string
+  reasoningSteps?: string[]
+  finalAnswer?: string
+}>()
+
 const { t } = useI18n()
-const renderedMsg = computed(() => props.isUser ? props.text.replaceAll('\n', '<br/>') : renderMarkDown(props.text))
-const messageElement = ref<HTMLElement | null>(null);
-const resizeObserver: ResizeObserver = new ResizeObserver(onResize)
-var chart: any;
-var prevWidth: number = 0;
+const emit = defineEmits(['stopReasoning', 'content-updated'])
+const showReasoningPanel = ref(true)
+const showFinalAnswer   = ref(false)
+const showFinalDarkCollapsible = ref(false)
+const showButtonStopReasoning = ref(true)
+const revealedSteps = ref<string[]>([])
+let collapseTimer: ReturnType<typeof setTimeout> | null = null
 
-function renderMarkDown(text: string) {
-  let md = new MarkdownIt({
-    highlight: (code: string, lang: string) => {
-      let ret = code
+function renderMarkdown(text: string) {
+  const md = new MarkdownIt({
+    highlight: (code, lang) => {
       if (lang && hljs.getLanguage(lang)) {
-        try {
-          ret = hljs.highlight(code, { language: lang }).value
-        } catch (__) { }
+        try { return hljs.highlight(code, { language: lang }).value } catch {}
       }
-      return '<pre><code class="hljs">' + ret + '</code></pre>'
+      return code
     }
   })
-  useTargetBlankLinks(md)
-  useEcharts(md)
   md.use(MarkdownItPlantuml)
+  const defaultRender = md.renderer.rules.link_open
+  md.renderer.rules.link_open = (tokens, idx, opts, env, self) => {
+    tokens[idx].attrSet('target', '_blank')
+    return (defaultRender || self.renderToken)(tokens, idx, opts, env, self)
+  }
   return md.render(text)
 }
 
-function useTargetBlankLinks(md: MarkdownIt) {
-  let defaultRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
-    return self.renderToken(tokens, idx, options)
-  }
-  md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
-    tokens[idx].attrSet('target', '_blank')
-    return defaultRender(tokens, idx, options, env, self)
-  }
-}
+const renderedMsg = computed(() =>
+  props.isUser ? props.text.replace(/\n/g, '<br/>') : renderMarkdown(props.text)
+)
 
-function useEcharts(md: MarkdownIt) {
-  const defaultRender = md.renderer.rules.fence || function (tokens, idx, options, env, self) {
-    return self.renderToken(tokens, idx, options);
-  };
-  md.renderer.rules.fence = function (tokens, idx, options, env, self) {
-    const token = tokens[idx];
-    const code = token.content.trim();
-    if (token.info === 'echarts') {
-      nextTick().then(() => {
-        const container = messageElement.value!;
-        const chartDiv = container.querySelector('.echarts');
-        const chartData = container.querySelector('.echarts-data');
-        if (chartDiv && chartData) {
-          chart = echarts.init(chartDiv as HTMLDivElement);
-          const options = JSON.parse(chartData.textContent || '');
-          solveEchartsFormatter(options.xAxis.axisLabel);
-          solveEchartsFormatter(options.xAxis.axisPointer.label);
-          chart.setOption(options);
-        }
-      });
-      return `<div class="echarts" style="width: 100%; height: 200px;"></div><div class="echarts-data" style='display:none'>${code}</div>`;
-    }
-    return defaultRender(tokens, idx, options, env, self);
-  };
-}
+const renderedFinal = computed(() =>
+  props.finalAnswer ? renderMarkdown(props.finalAnswer) : ''
+)
 
-function solveEchartsFormatter(obj: any) {
-  if (obj && obj.formatter) {
-    if (obj.formatter.name === 'formatEpoch') {
-      obj.formatter = formatEpoch(obj.formatter)
-    }
-  }
-}
-
-function formatEpoch(config: any): (value: any) => string {
-  return (value: any) => {
-    if (typeof value === 'object') {
-      value = value.value;
-    }
-    const time = moment(parseInt(value))
-    return time.format(config.format);
-  }
-}
-
-function onResize() {
-  if (messageElement.value!.scrollWidth != prevWidth && chart) {
-    prevWidth = messageElement.value!.scrollWidth;
-    chart.resize();
-  }
-}
-
-onMounted(() => {
-  if (messageElement.value) {
-    resizeObserver.observe(messageElement.value)
-  }
+const displaySteps = computed(() => {
+  const steps = props.reasoningSteps ? [...props.reasoningSteps] : []
+  return [
+    'Analizando pedido del usuario',
+    'Elaborando respuesta',
+    ...steps
+  ]
 })
 
-onBeforeUnmount(() => {
-  if (messageElement.value) {
-    resizeObserver.unobserve(messageElement.value)
+const formattedReasoningContent = computed(() => {
+  const content = revealedSteps.value.map(line => line.trim()).join('<br/><br/>')
+  emit('content-updated')
+  return content
+})
+
+watch(
+  () => props.reasoningSteps?.length,
+  (len) => {
+    if (len && len > 0) {
+      showReasoningPanel.value = true
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.finalAnswer,
+  (fa) => {
+    if (!fa) return
+    if (!props.reasoningSteps?.length) {
+      showFinalAnswer.value = true
+      return
+    }
+    if (collapseTimer) clearTimeout(collapseTimer)
+    collapseTimer = setTimeout(() => {
+      showReasoningPanel.value = false
+      showFinalAnswer.value   = true
+      showFinalDarkCollapsible.value = true
+    }, 7000)
   }
+)
+
+watch(
+  () => displaySteps.value,
+  (allSteps) => {
+    revealedSteps.value = []
+    let idx = 0
+    const timer = setInterval(() => {
+      revealedSteps.value.push(allSteps[idx++])
+      if (idx >= allSteps.length) {
+        clearInterval(timer)
+        showFinalAnswer.value = true
+      }
+    }, 500)
+  },
+  { immediate: true }
+)
+
+function handleStopReasoning() {
+  if (collapseTimer) clearTimeout(collapseTimer)
+  showButtonStopReasoning.value = false
+  emit('stopReasoning')
+}
+
+onBeforeUnmount(() => {
+  if (collapseTimer) clearTimeout(collapseTimer)
 })
 </script>
 
 <template>
-  <div class="flex flex-col mb-1 p-1 min-w-7" :class="!isSuccess ? ['border-red-500', 'border-b'] : []">
+  <div
+    class="flex flex-col mb-1 p-1 min-w-7"
+    :class="!isSuccess ? ['border-red-500','border-b'] : []"
+  >
     <div class="flex items-center flex-row">
       <template v-if="isUser">
-        <circle-filled-icon class="text-violet-600" />
+        <CircleFilledIcon class="text-violet-600" />
       </template>
       <template v-else-if="!isUser && isSuccess">
         <img :src="agentLogo" class="w-5 mr-1 rounded-full" />
       </template>
       <template v-else>
-        <exclamation-circle-icon class="text-red-600" />
+        <ExclamationCircleIcon class="text-red-600" />
       </template>
-
       <span class="text-base">{{ isUser ? t('you') : agentName }}</span>
       <div class="flex-auto flex justify-end">
-        <CopyButton v-if="!isUser && text" :text="text" :html="renderedMsg" />
-        <NewPromptButton v-if="isUser && text" :is-large-icon="false" :text="text" :agent-id="agentId" />
+        <CopyButton
+          v-if="!isUser && text"
+          :text="text"
+          :html="renderedMsg"
+        />
+        <NewPromptButton
+          v-if="isUser && text"
+          :is-large-icon="false"
+          :text="text"
+          :agent-id="agentId"
+        />
       </div>
     </div>
+
     <div class="mt-2 ml-8 mr-2">
-      <div>
-        <template v-if="file.data">
-          <audio controls>
-            <source :src="file.url" type="audio/webm">
-          </audio>
-        </template>
-        <template v-if="text">
-          <div v-html="renderedMsg" ref="messageElement"
-            class="flex flex-col text-sm font-light leading-tight gap-2 rendered-msg" />
-        </template>
-      </div>
-      <div class="ml-3 dot-pulse" v-if="!isComplete" />
+      <template v-if="file.data">
+        <audio controls>
+          <source :src="file.url" type="audio/webm" />
+        </audio>
+      </template>
+
+      <template v-if="isUser || props.text !== ''">
+        <div v-html="renderedMsg" class="mt-2 p-2 bg-white rounded text-gray-800 text-sm" />
+      </template>
+
+      <template
+        v-else-if="!props.reasoningSteps?.length && props.finalAnswer"
+      >
+        <div v-html="renderedFinal" class="mt-2 p-2 bg-white rounded text-gray-800 text-sm" />
+      </template>
+
+      <template v-else-if="props.reasoningSteps?.length && showButtonStopReasoning">
+        <Collapsible
+          v-model:open="showReasoningPanel"
+          :title="showReasoningPanel ? 'Ocultar razonamiento' : 'Ver razonamiento'"
+          @stop="handleStopReasoning"
+          @content-updated="$emit('content-updated')"
+          :content="formattedReasoningContent"
+          :show-button-visible="showFinalDarkCollapsible"
+        />
+        <div
+          v-if="props.finalAnswer && showFinalDarkCollapsible"
+          v-html="renderedFinal"
+          class="mt-2 p-2 bg-white rounded text-gray-800 text-sm"
+        />
+      </template>
+      <template v-else-if="!showButtonStopReasoning">
+        <div v-html="'The reasoning was stopped. ✋'" class="mt-2 p-2 bg-white rounded text-gray-800 text-sm" />
+      </template>
+
+      <div class="dot-pulse" v-if="!isComplete" />
     </div>
   </div>
 </template>
+
 <style lang="scss">
-@use 'three-dots' with ($dot-width: 5px,
+@use 'three-dots' with (
+  $dot-width: 5px,
   $dot-height: 5px,
-  $dot-color: var(--accent-color));
+  $dot-color: var(--accent-color)
+);
 
 .rendered-msg pre {
   padding: 15px;
   background: #202126;
   border-radius: 8px;
-  text-wrap: wrap;
+  word-wrap: break-word;
 }
 
-// Fix: Inadequate gap between code blocks within list items.
+/* Fix: Inadequate gap between code blocks within list items. */
 .rendered-msg li pre {
   margin-bottom: 10px;
 }
@@ -202,7 +257,7 @@ div a {
   padding: var(--half-spacing);
 }
 
-.rendered-msg>img {
+.rendered-msg > img {
   box-shadow: var(--shadow);
   border-radius: var(--spacing);
   width: fit-content;

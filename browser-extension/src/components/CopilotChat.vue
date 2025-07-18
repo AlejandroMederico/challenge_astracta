@@ -9,24 +9,42 @@ import CopilotConfig from './CopilotConfig.vue'
 import PageOverlay from './PageOverlay.vue'
 import BtnClose from './BtnClose.vue'
 
-const props = defineProps<{ agentId: string, agentName: string, agentLogo: string, agentCapabilities: string[], messages: ChatMessage[] }>()
+const props = defineProps<{ 
+  agentId: string,
+  agentName: string,
+  agentLogo: string,
+  agentCapabilities: string[],
+  messages: ChatMessage[]
+}>()
 const emit = defineEmits<{
   (e: 'close'): void,
-  (e: 'userMessage', text: string, file: Record<string, string>): void
+  (e: 'userMessage',
+  text: string,
+  file: Record<string, string>): void
 }>()
 
-const messagesDiv = ref<HTMLDivElement>()
+const messagesDiv = ref<HTMLElement | null>(null)
 const showConfig = ref(false)
 
-watch(props.messages, async () => {
-  await adjustMessagesScroll()
-})
-
-const adjustMessagesScroll = async () => {
-  await nextTick(() => {
+function scrollToBottom() {
+  if (!messagesDiv.value) return
+  requestAnimationFrame(() => {
     messagesDiv.value!.scrollTop = messagesDiv.value!.scrollHeight
   })
 }
+
+watch(
+  () => props.messages,
+  async () => {
+    await nextTick()
+    scrollToBottom()
+  }
+)
+
+function onContentUpdated() {
+  scrollToBottom()
+}
+
 
 const onUserMessage = async (text: string, file: Record<string, string>) => {
   emit('userMessage', text, file)
@@ -49,16 +67,39 @@ const lastMessage = computed((): ChatMessage => props.messages[props.messages.le
     </template>
     <template v-slot:content>
       <div class="h-full flex flex-col">
-        <div class="h-full flex flex-col overflow-y-auto mb-4" ref="messagesDiv">
-          <Message v-for="message in messages" :text="message.text" :file="message.file" :is-user="message.isUser"
-            :is-complete="message.isComplete" :is-success="message.isSuccess" :agent-logo="agentLogo" :agent-name="agentName" :agent-id="agentId" />
+        <div
+          ref="messagesDiv"
+          class="flex-1 overflow-y-auto mb-4"
+        >
+          <Message
+            v-for="message in messages"
+            :text="message.text"
+            :file="message.file"
+            :is-user="message.isUser"
+            @content-updated="onContentUpdated"
+            :is-complete="message.isComplete"
+            :is-success="message.isSuccess"
+            :agent-logo="agentLogo"
+            :agent-name="agentName"
+            :agent-id="agentId"
+            :reasoning-steps="message.reasoningSteps || []"
+            :final-answer="message.finalAnswer"
+          />
         </div>
-        <ChatInput :can-send-message="lastMessage.isComplete" :agent-id="agentId"
-          :support-recording="agentCapabilities.includes('transcripts')" @send-message="onUserMessage" />
+        <ChatInput
+          :can-send-message="lastMessage.isComplete"
+          :agent-id="agentId"
+          :support-recording="agentCapabilities.includes('transcripts')"
+          @send-message="onUserMessage"
+        />
       </div>
     </template>
     <template v-slot:modalsContainer>
-      <CopilotConfig :show="showConfig" :agent-id="agentId" :agent-name="agentName" :agent-logo="agentLogo"
+      <CopilotConfig
+        :show="showConfig"
+        :agent-id="agentId"
+        :agent-name="agentName"
+        :agent-logo="agentLogo"
         @close="showConfig = false" />
     </template>
   </PageOverlay>

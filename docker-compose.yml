@@ -1,21 +1,24 @@
 version: "3.8"
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+    command: ["start-dev", "--import-realm"]
+
   agent:
     build: agent-extended
     ports:
       - "8000:8000"
     environment:
       - OPENID_URL=http://keycloak:8080/realms/browser-copilot
-      - MANIFEST_OPENID_URL=http://localhost:8080/realms/browser-copilot
+      - MANIFEST_OPENID_URL=http://keycloak:8080/realms/browser-copilot  # Mejor usar el hostname del servicio aquí también
     volumes:
-      - ./agent-extended/gpt_agent:/usr/src/app/gpt_agent
-  keycloak:
-    image: quay.io/keycloak/keycloak
-    ports: 
-     - "8080:8080"
-    environment:
-     - KEYCLOAK_ADMIN=admin
-     - KEYCLOAK_ADMIN_PASSWORD=admin
-    volumes:
-      - ./keycloak:/opt/keycloak/data/import
-    command: ["start-dev", "--import-realm"]
+      - ./agent-extended:/usr/src/app
+    depends_on:
+      - keycloak   # Esto asegura que docker arranque primero keycloak (no garantiza que esté listo)

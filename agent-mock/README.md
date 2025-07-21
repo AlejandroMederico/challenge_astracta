@@ -38,3 +38,13 @@ Antes se debe tener un agente corriendo en el puerto 8000.
 
 - Actualización y alineación de dependencias con agent-simple.
 - Inclusión de paquetes necesarios para mantener compatibilidad y estabilidad.
+
+### 4. agent-ext.py
+
+- Se agrego un metodo test para probar el agente, pero se debe ejecutar de la siguiente manera:
+
+```bash
+poetry run python agent-ext.py test
+```
+
+Antes se debe tener un agente corriendo en el puerto 8000.
